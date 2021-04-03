@@ -12,6 +12,7 @@
 
 #define BLOCK_SIZE 16
 #define KEY_SIZE 16
+#define WORD_SIZE 4
 #define ROW_SIZE 4
 #define COL_SIZE 4
 
@@ -136,14 +137,19 @@ void string_to_hex(std::string& str_obj){
 }
 */
 
-std::string hex_convert(std::string &str_obj)
+std::string HexConvert(std::string &str_obj)
 {  
     
     std::string hex_value;
     char const hex_chars[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
     for (auto& byte : str_obj) {
+        //Mask the lower 4 bits of input byte with 0xF0 and right shift 4 so 
+        //that higer 4 bits are now located in the lower 4 bits
+
         hex_value += hex_chars[(byte & 0xF0) >> 4];
+        // Mask the higher 4 bits of the input byte with 0x0F and extact the 
+        // lower for bits
         hex_value += hex_chars[(byte & 0x0F) >> 0];
     }
     std::cout << hex_value;
@@ -151,20 +157,74 @@ std::string hex_convert(std::string &str_obj)
 
 }
 
-void xor_input(std::string& input, std::string& output)
+
+void XorInput(std::string& input, std::string& output)
 {
     for (int i = 0; i < BLOCK_SIZE; i++) {
         output[i] ^= input[i];
     }
+}
+
+
+void RotateByte(unsigned char* column_word) {
+    unsigned char temp;
+    temp = column_word[0];
+    column_word[0] = column_word[1];
+    column_word[1] = column_word[2];
+    column_word[2] = column_word[3];
+    column_word[3] = temp;
+ }
+
+
+void SubstituteByte(unsigned char* input_byte) {
+    for (int i = 0; i < COL_SIZE; i++) {
+        input_byte[i] = s_box[(input_byte[i] & 0xF0) >> 4][input_byte[i] & 0x0F];
+    }
+}
+/*
+* 
+             W(i) W(i-1)
+              |     |
+              V     V
++---------------+------------------+
+| 1 | 2 | 3 | 3 |   4  | 1 | 2 | 3 |
++----------------------------------+
+| 5 | 6 | 7 | 7 |   7  | 5 | 6 | 7 |
++----------------------------------+
+| 7 | 6 | 6 | 6 |   7  | 7 | 6 | 6 |
++----------------------------------+
+| 6 | 7 | 8 | 8 |   9  | 6 | 7 | 8 |
++---------------+------------------+
+*/
+
+void build_key_schedule(unsigned char word_matrix[][4], std::string &key) {
+    unsigned char rcon = 0x01;
+    std::memcpy(word_matrix, key.c_str(), key.size());
+
+    //key size in 4 byte word
+    int key_word = KEY_SIZE >> 2;
+    // key word size + 1 extra permutation times key word size
+    for (int i = 0; i < (4 * (key_word + 7)); i++) {
+        std::memcpy(word_matrix[i], word_matrix[i - 1], WORD_SIZE);
+        if (!(i % key_word))
+        {
+            RotateByte(word_matrix[i]);
+            SubstituteByte(word_matrix[i]);
+            if( !(i % 36)) { 
+                rcon = 0x1B; 
+            }
+            word_matrix[i][0] ^= rcon;
+            rcon <<= 1;
+        }
+        word_matrix[i][0] ^= word_matrix[i - key_word][0];
+        word_matrix[i][1] ^= word_matrix[i - key_word][1];
+        word_matrix[i][2] ^= word_matrix[i - key_word][2];
+        word_matrix[i][3] ^= word_matrix[i - key_word][3];
+    }
 
 }
 
-//void build_key_schedule() {
-//
-//}
-
-//void aes_engine(std::string &input, std::string &output, std::string &key) {
-void aes_engine(std::string & input) {
+void aes_engine(std::string &input, std::string &output, std::string &key) {
     unsigned char state_matrix[4][4];
     for (int i = 0; i < ROW_SIZE; i++) {
         for (int j = 0; j < COL_SIZE; j++) {
@@ -185,8 +245,8 @@ int main()
     std::string init_vector("UNSW_INIT_VECTOR");
     //std::string key("UNSW_PROJECT_AES");
     //hex_convert(sample);
-    xor_input(init_vector, sample_message);
-    aes_engine(sample_message);
+    XorInput(init_vector, sample_message);
+    aes_engine(sample_message,sample_message, sample_message);
     //string_to_hex(sample);
     //string_to_hex(key);
 
