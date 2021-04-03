@@ -166,7 +166,7 @@ void XorInput(std::string& input, std::string& output)
 }
 
 
-void RotateByte(unsigned char* column_word) {
+void RotateWord(unsigned char* column_word) {
     unsigned char temp;
     temp = column_word[0];
     column_word[0] = column_word[1];
@@ -176,7 +176,7 @@ void RotateByte(unsigned char* column_word) {
  }
 
 
-void SubstituteByte(unsigned char* input_byte) {
+void SubstituteWord(unsigned char* input_byte) {
     for (int i = 0; i < COL_SIZE; i++) {
         input_byte[i] = s_box[(input_byte[i] & 0xF0) >> 4][input_byte[i] & 0x0F];
     }
@@ -197,7 +197,7 @@ void SubstituteByte(unsigned char* input_byte) {
 +---------------+------------------+
 */
 
-void build_key_schedule(unsigned char word_matrix[][4], std::string &key) {
+void BuildKeySchedule(unsigned char word_matrix[][4], std::string &key) {
     unsigned char rcon = 0x01;
     std::memcpy(word_matrix, key.c_str(), key.size());
 
@@ -208,8 +208,8 @@ void build_key_schedule(unsigned char word_matrix[][4], std::string &key) {
         std::memcpy(word_matrix[i], word_matrix[i - 1], WORD_SIZE);
         if (!(i % key_word))
         {
-            RotateByte(word_matrix[i]);
-            SubstituteByte(word_matrix[i]);
+            RotateWord(word_matrix[i]);
+            SubstituteWord(word_matrix[i]);
             if( !(i % 36)) { 
                 rcon = 0x1B; 
             }
@@ -221,16 +221,159 @@ void build_key_schedule(unsigned char word_matrix[][4], std::string &key) {
         word_matrix[i][2] ^= word_matrix[i - key_word][2];
         word_matrix[i][3] ^= word_matrix[i - key_word][3];
     }
+}
+
+void AddRoundKey(unsigned char state_matrix[][4], unsigned char word_matrix[][4]){
+    for (int i = 0; i < COL_SIZE; i++) {
+        for (int j = 0; j < ROW_SIZE; j++) {
+            state_matrix[j][i] = state_matrix[j][i] ^ word_matrix[i][j];
+        }
+    }
+}
+
+void SubstituteByte(unsigned char state_matrix[][4]){
+    for (int i = 0; i < ROW_SIZE; i++) {
+        for (int j = 0; j < COL_SIZE; j++) {
+            state_matrix[i][j] = s_box[(state_matrix[i][j] & 0xF0) >> 4][state_matrix[i][j] & 0x0F];
+        }
+    }
+}
+
+void ShiftRows(unsigned char state_matrix[][4]) {
+ /*    
+* Unaltered State matrix
+*        +-------------------+
+*        | d4 | e0 | b8 | le |
+*        +--------------------
+*        | 27 | bf | b4 | 41 |
+*        +--------------------
+*        | 11 | 98 | 5d | 52 |
+*        +--------------------
+*        | ae | f1 | e5 | 30 |
+*        +-------------------+
+*/
+int temp_save;
+/*
+* Rotate First row 1 byte
+*        +-------------------+
+*        | d4 | e0 | b8 | le |
+*        +--------------------
+*        | bf | b4 | 41 | 27 |<--
+*        +--------------------
+*        | 11 | 98 | 5d | 52 |
+*        +--------------------
+*        | ae | f1 | e5 | 30 |
+*        +-------------------+
+*/
+temp_save = state_matrix[1][0];
+state_matrix[1][0] = state_matrix[1][1];
+state_matrix[1][1] = state_matrix[1][2];
+state_matrix[1][2] = state_matrix[1][3];
+state_matrix[1][3] = temp_save;
+
+/*
+* Rotate Second row 2 bytes
+        +-------------------+
+        | d4 | e0 | b8 | le |
+        +--------------------
+        | 27 | bf | b4 | 41 |
+        +--------------------
+        | 5d | 52 | 11 | 98 |<--
+        +--------------------
+        | ae | f1 | e5 | 30 |
+        +-------------------+
+*/
+temp_save = state_matrix[2][0];
+state_matrix[2][0] = state_matrix[2][2];
+state_matrix[2][2] = temp_save;
+temp_save = state_matrix[2][1];
+state_matrix[2][1] = state_matrix[2][3];
+state_matrix[2][3] = temp_save;
+
+/* Rotate Third row 3 bytes
+        +-------------------+
+        | d4 | e0 | b8 | le |
+        +--------------------
+        | 27 | bf | b4 | 41 |
+        +--------------------
+        | 11 | 98 | 5d | 52 |
+        +--------------------
+        | 30 | ae | f1 | e5 |<--
+        +-------------------+
+*/
+temp_save = state_matrix[3][3];
+state_matrix[3][3] = state_matrix[3][2];
+state_matrix[3][2] = state_matrix[3][1];
+state_matrix[3][1] = state_matrix[3][0];
+state_matrix[3][0] = temp_save;
+}
+
+/*
+* Mix-column, along with shift row, is how Rijndael performs diffusion.
+* The S-Box is responsible for the confusion aspect of the cipher.
+* The mix column stage acts by taking a single column of four of Rijndael's 
+* sixteen values, and performing Matrix multiplication in Rijndael's Galois 
+* field to make it so each byte in the input affects all four bytes of the output.
+* https://en.wikipedia.org/wiki/Rijndael_MixColumns
+*/
+void MixGivenColumn(unsigned char* r) {
+
+    unsigned char a[4];
+    unsigned char b[4];
+    unsigned char c;
+    unsigned char h;
+    /* The array 'a' is simply a copy of the input array 'r'
+     * The array 'b' is each element of the array 'a' multiplied by 2
+     * in Rijndael's Galois field
+     * a[n] ^ b[n] is element n multiplied by 3 in Rijndael's Galois field */
+    for (c = 0; c < 4; c++) {
+        a[c] = r[c];
+        /* h is 0xff if the high bit of r[c] is set, 0 otherwise */
+        h = (unsigned char)((signed char)r[c] >> 7); /* arithmetic right shift, thus shifting in either zeros or ones */
+        b[c] = r[c] << 1; /* implicitly removes high bit because b[c] is an 8-bit char, so we xor by 0x1b and not 0x11b in the next line */
+        b[c] ^= 0x1B & h; /* Rijndael's Galois field */
+    }
+    r[0] = b[0] ^ a[3] ^ a[2] ^ b[1] ^ a[1]; /* 2 * a0 + a3 + a2 + 3 * a1 */
+    r[1] = b[1] ^ a[0] ^ a[3] ^ b[2] ^ a[2]; /* 2 * a1 + a0 + a3 + 3 * a2 */
+    r[2] = b[2] ^ a[1] ^ a[0] ^ b[3] ^ a[3]; /* 2 * a2 + a1 + a0 + 3 * a3 */
+    r[3] = b[3] ^ a[2] ^ a[1] ^ b[0] ^ a[0]; /* 2 * a3 + a2 + a1 + 3 * a0 */
 
 }
 
-void aes_engine(std::string &input, std::string &output, std::string &key) {
+void MixColumns(unsigned char state_matrix[][4]){
+    for (int i = 0; i < COL_SIZE; i++) {
+            MixGivenColumn(state_matrix[i]);
+    }
+}
+
+void Encrypt(std::string &input, std::string &output, std::string &key) {
     unsigned char state_matrix[4][4];
+    // for 128bit key 10 rounds required.
+    const int number_rounds = 10;
+    // Array to store Key schedule for 128 bit keys
+    unsigned char word_matrix[60][4];
+
     for (int i = 0; i < ROW_SIZE; i++) {
         for (int j = 0; j < COL_SIZE; j++) {
             state_matrix[i][j] = input[i + (4 * j)];
         }
     }
+
+    
+    BuildKeySchedule(word_matrix, key);
+    AddRoundKey(state_matrix, &word_matrix[0]);
+
+
+    for (int round = 0; round < number_rounds; round++)
+    {
+        SubstituteByte(state_matrix);
+        ShiftRows(state_matrix);
+        if (round < number_rounds - 1) {
+            MixColumns(state_matrix);
+        }
+        AddRoundKey(state_matrix, &word_matrix[(round + 1) * 4]);
+    }
+
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 4; j++) {
             std::cout << state_matrix[i][j];
@@ -246,7 +389,7 @@ int main()
     //std::string key("UNSW_PROJECT_AES");
     //hex_convert(sample);
     XorInput(init_vector, sample_message);
-    aes_engine(sample_message,sample_message, sample_message);
+    Encrypt(sample_message,sample_message, sample_message);
     //string_to_hex(sample);
     //string_to_hex(key);
 
