@@ -1,14 +1,12 @@
 // AES_UNSW.cpp : This file contains the 'main' function. Program execution begins and ends there.
 //
-
-
-
 #include <iostream>
 #include <string>
 #include <sstream>
 #include <iterator>
 #include <vector>
 #include <xstring>
+#include <array>
 
 #define BLOCK_SIZE 16
 #define KEY_SIZE 16
@@ -32,7 +30,7 @@ namespace unsig{
  * If the 8th bit is 1, it means mod(2^7) will be left => 00011011, and finally the entire xtime(x) becomes (x << 1) xor 00011011 (see GF(2^n) quick mod for details Way of calculation)
  * If the 8th bit is 0, it will become 0 * 0x1b, and finally the entire xtime(x) (x << 1) XOR 0 = (x << 1)
  */
-#define xtime(x) ((x << 1) ^ (((x >> 7) & 0x01) * 0x1b))
+//#define xtime(x) ((x << 1) ^ (((x >> 7) & 0x01) * 0x1b))
 
 #define Multiply(x, y)                                \
       (  ((y & 1) * x) ^                              \
@@ -113,69 +111,6 @@ const unsigned char inv_s_box[16][16] = {
   0xe1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0c, 0x7d },
 };
 
-/*
-void string_to_hex(std::string& str_obj){
-
-    std::cout << "string: " << str_obj << std::endl;
-
-    int** ary = new int* [4];
-    const char* xx = str_obj.c_str();
-
-    for (int i = 0; i < 4; i++) {
-        ary[i] = new int[4];
-    }
-
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 4; j++) {
-            ary[j][i] = int(*(xx++));
-        }
-    }
-
-    for (const auto& item : str_obj) {
-        //std::cout << std::hex << int(item)<<std::endl;
-        hex_value.push_back( int(item));
-    }
-    std::cout << std::endl;
-    //for (auto& x : hex_value) {
-     //   std::cout << std::hex << x;
-    //}
-    std::cout << "----------------" << std::endl;
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 4; j++) {
-            std::cout << '|' << std::hex <<ary[i][j]<<'|';
-        }
-        std::cout<<std::endl;
-        std::cout << "----------------"<<std::endl;
-    }
-
-
-    for (int r = 0; r < 4; r++)
-    {
-        for (int c = 0; c < 4; c++)
-        {
-            std::cout << s_box[(ary[r][c]) >> 4][ary[r][c]];
-        }
-    }
-
-
-    std::cout << "----------------" << std::endl;
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 4; j++) {
-            std::cout << '|' << std::hex << ary[i][j] << '|';
-        }
-        std::cout << std::endl;
-        std::cout << "----------------" << std::endl;
-    }
-
-
-    if (ary != NULL) {
-        for (int i = 0; i < 4; i++) {
-            delete[] ary[i];
-        }
-        delete[] ary;
-    }
-}
-*/
 
 std::string HexConvert(std::string &str_obj)
 {  
@@ -245,7 +180,7 @@ void BuildKeySchedule(unsigned char word_matrix[][4], std::string &key) {
     //key size in 4 byte word
     int key_word = KEY_SIZE >> 2;
     // key word size + 1 extra permutation times key word size
-    for (int i = 0; i < (4 * (key_word + 7)); i++) {
+    for (int i = key_word; i < (4 * (key_word + 7)); i++) {
         std::memcpy(word_matrix[i], word_matrix[i - 1], WORD_SIZE);
         if (!(i % key_word))
         {
@@ -464,36 +399,81 @@ void InverseShiftRows(unsigned char state_matrix[][4]) {
 //    }
 //}
 
-static void MixColumns(unsigned char state_matrix[][4])
+//static void MixColumns(unsigned char state_matrix[][4])
+//{
+//    unsigned char Tmp, Tm, t;
+//    for (int i = 0; i < 4; ++i)
+//    {
+//        t = state_matrix[i][0];
+//        Tmp = state_matrix[i][0] ^ state_matrix[i][1] ^ state_matrix[i][2] ^ state_matrix[i][3];
+//        Tm = state_matrix[i][0] ^ state_matrix[i][1]; Tm = xtime(Tm);  state_matrix[i][0] ^= Tm ^ Tmp;
+//        Tm = state_matrix[i][1] ^ state_matrix[i][2]; Tm = xtime(Tm);  state_matrix[i][1] ^= Tm ^ Tmp;
+//        Tm = state_matrix[i][2] ^ state_matrix[i][3]; Tm = xtime(Tm);  state_matrix[i][2] ^= Tm ^ Tmp;
+//        Tm = state_matrix[i][3] ^ t;              Tm = xtime(Tm);  state_matrix[i][3] ^= Tm ^ Tmp;
+//    }
+//}
+
+unsigned char xtime(unsigned char x)
 {
-    unsigned char Tmp, Tm, t;
-    for (int i = 0; i < 4; ++i)
+    return (x << 1) ^ ((x & 0x80) ? 0x1b : 0x00);
+}
+
+unsigned char dot(unsigned char x, unsigned char y)
+{
+    unsigned char mask;
+    unsigned char product = 0;
+
+    for (mask = 0x01; mask; mask <<= 1)
     {
-        t = state_matrix[i][0];
-        Tmp = state_matrix[i][0] ^ state_matrix[i][1] ^ state_matrix[i][2] ^ state_matrix[i][3];
-        Tm = state_matrix[i][0] ^ state_matrix[i][1]; Tm = xtime(Tm);  state_matrix[i][0] ^= Tm ^ Tmp;
-        Tm = state_matrix[i][1] ^ state_matrix[i][2]; Tm = xtime(Tm);  state_matrix[i][1] ^= Tm ^ Tmp;
-        Tm = state_matrix[i][2] ^ state_matrix[i][3]; Tm = xtime(Tm);  state_matrix[i][2] ^= Tm ^ Tmp;
-        Tm = state_matrix[i][3] ^ t;              Tm = xtime(Tm);  state_matrix[i][3] ^= Tm ^ Tmp;
+        if (y & mask)
+        {
+            product ^= x;
+        }
+        x = xtime(x);
+    }
+
+    return product;
+}
+
+static void MixColumns(unsigned char s[][4])
+{
+    int c;
+    unsigned char t[4];
+
+    for (c = 0; c < 4; c++)
+    {
+        t[0] = dot(2, s[0][c]) ^ dot(3, s[1][c]) ^ s[2][c] ^ s[3][c];
+        t[1] = s[0][c] ^ dot(2, s[1][c]) ^ dot(3, s[2][c]) ^ s[3][c];
+        t[2] = s[0][c] ^ s[1][c] ^ dot(2, s[2][c]) ^ dot(3, s[3][c]);
+        t[3] = dot(3, s[0][c]) ^ s[1][c] ^ s[2][c] ^ dot(2, s[3][c]);
+        s[0][c] = t[0];
+        s[1][c] = t[1];
+        s[2][c] = t[2];
+        s[3][c] = t[3];
     }
 }
 
-static void InverseMixColumns(unsigned char state_matrix[][4])
-{
-    unsigned char a, b, c, d;
-    for (int i = 0; i < 4; ++i)
-    {
-        a = state_matrix[i][0];
-        b = state_matrix[i][1];
-        c = state_matrix[i][2];
-        d = state_matrix[i][3];
 
-        state_matrix[i][0] = Multiply(a, 0x0e) ^ Multiply(b, 0x0b) ^ Multiply(c, 0x0d) ^ Multiply(d, 0x09);
-        state_matrix[i][1] = Multiply(a, 0x09) ^ Multiply(b, 0x0e) ^ Multiply(c, 0x0b) ^ Multiply(d, 0x0d);
-        state_matrix[i][2] = Multiply(a, 0x0d) ^ Multiply(b, 0x09) ^ Multiply(c, 0x0e) ^ Multiply(d, 0x0b);
-        state_matrix[i][3] = Multiply(a, 0x0b) ^ Multiply(b, 0x0d) ^ Multiply(c, 0x09) ^ Multiply(d, 0x0e);
+
+static void InverseMixColumns(unsigned char s[][4])
+{
+    int c;
+    unsigned char t[4];
+
+    for (c = 0; c < 4; c++)
+    {
+        t[0] = dot(0x0e, s[0][c]) ^ dot(0x0b, s[1][c]) ^ dot(0x0d, s[2][c]) ^ dot(0x09, s[3][c]);
+        t[1] = dot(0x09, s[0][c]) ^ dot(0x0e, s[1][c]) ^ dot(0x0b, s[2][c]) ^ dot(0x0d, s[3][c]);
+        t[2] = dot(0x0d, s[0][c]) ^ dot(0x09, s[1][c]) ^ dot(0x0e, s[2][c]) ^ dot(0x0b, s[3][c]);
+        t[3] = dot(0x0b, s[0][c]) ^ dot(0x0d, s[1][c]) ^ dot(0x09, s[2][c]) ^ dot(0x0e, s[3][c]);
+        s[0][c] = t[0];
+        s[1][c] = t[1];
+        s[2][c] = t[2];
+        s[3][c] = t[3];
     }
 }
+
+
 
 std::string Encrypt(std::string &input, std::string &output, std::string &key) {
     unsigned char state_matrix[4][4];
@@ -502,7 +482,6 @@ std::string Encrypt(std::string &input, std::string &output, std::string &key) {
     // Array to store Key schedule for 128 bit keys
     unsigned char word_matrix[60][4];
 
-    std::string encrypted_output;
 
     for (int i = 0; i < ROW_SIZE; i++) {
         for (int j = 0; j < COL_SIZE; j++) {
@@ -519,29 +498,35 @@ std::string Encrypt(std::string &input, std::string &output, std::string &key) {
     {
         SubstituteByte(state_matrix);
         ShiftRows(state_matrix);
-        AddRoundKey(state_matrix, &word_matrix[(round - 1) * 4]);
         if (round < number_rounds - 1) {
             MixColumns(state_matrix);
         }
+        AddRoundKey(state_matrix, &word_matrix[(round + 1) * 4]);
  
     }
 
+
+    std::string encrypted_char(16,' ');
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 4; j++) {
-            encrypted_output += state_matrix[i][j];
+            encrypted_char[i+(4*j)] = state_matrix[i][j];
         }
     }
-    std::cout << encrypted_output;
-    return HexConvert(encrypted_output);
+
+
+    std::cout << HexConvert(encrypted_char);
+    std::cout << std::endl;
+    return HexConvert(encrypted_char);
 }
 
-void Decrypt(std::string& input, std::string& output, std::string& key){
+
+std::string Decrypt(std::string& input, std::string& output, std::string& key){
     unsigned char state_matrix[4][4];
     // for 128bit key 10 rounds required.
     const int number_rounds = 10;
     // Array to store Key schedule for 128 bit keys
     unsigned char word_matrix[60][4];
-    std::string decrypt_output;
+    std::string decrypt_output(16,' ');
 
     for (int i = 0; i < ROW_SIZE; i++){
         for(int j=0; j< COL_SIZE; j++){
@@ -556,6 +541,7 @@ void Decrypt(std::string& input, std::string& output, std::string& key){
     {
         InverseSubstituteByte(state_matrix);
         InverseShiftRows(state_matrix);
+        AddRoundKey(state_matrix, &word_matrix[(round + 1) * 4]);
         if (round > 1) {
             InverseMixColumns(state_matrix);
         }
@@ -567,7 +553,8 @@ void Decrypt(std::string& input, std::string& output, std::string& key){
         }
     }
     std::cout << std::endl;
-    std::cout << decrypt_output;
+
+    return HexConvert(decrypt_output);
 }
 
 
@@ -577,11 +564,11 @@ int main()
     std::string init_vector("UNSW_INIT_VECTOR");
     std::string key("UNSW_PROJECT_AES");
     //hex_convert(sample);
-    //XorInput(init_vector, sample_message);
-    std::string temp = Encrypt(sample_message,sample_message, key);
-    Decrypt(temp,temp, key);
-    //string_to_hex(sample);
-    //string_to_hex(key);
+    XorInput(init_vector, sample_message);
+    std::string encrypted_hex_string = Encrypt(sample_message,sample_message, key);
+    Decrypt(encrypted_hex_string, encrypted_hex_string, key);
+    XorInput(init_vector, sample_message);
+    std::cout << sample_message;
 
 }
 
