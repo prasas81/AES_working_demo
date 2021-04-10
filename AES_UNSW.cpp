@@ -14,9 +14,6 @@
 #define ROW_SIZE 4
 #define COL_SIZE 4
 
-namespace unsig{
-    typedef std::basic_string<unsigned char> ustring;
-}
 
 /**
  *  xtime macro: (input * {02}) mod {1b}  GF(2^8)
@@ -32,15 +29,8 @@ namespace unsig{
  */
 //#define xtime(x) ((x << 1) ^ (((x >> 7) & 0x01) * 0x1b))
 
-#define Multiply(x, y)                                \
-      (  ((y & 1) * x) ^                              \
-      ((y>>1 & 1) * xtime(x)) ^                       \
-      ((y>>2 & 1) * xtime(xtime(x))) ^                \
-      ((y>>3 & 1) * xtime(xtime(xtime(x)))) ^         \
-      ((y>>4 & 1) * xtime(xtime(xtime(xtime(x))))))   \
 
-
-
+// Substitution table
 const unsigned char s_box[16][16] = {
 { 0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5,
   0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76 },
@@ -76,6 +66,7 @@ const unsigned char s_box[16][16] = {
   0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16 },
 };
 
+// Inverse substitution table
 const unsigned char inv_s_box[16][16] = {
 { 0x52, 0x09, 0x6a, 0xd5, 0x30, 0x36, 0xa5, 0x38,
   0xbf, 0x40, 0xa3, 0x9e, 0x81, 0xf3, 0xd7, 0xfb },
@@ -111,20 +102,22 @@ const unsigned char inv_s_box[16][16] = {
   0xe1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0c, 0x7d },
 };
 
-
+// Returns a string object that contains hexadecimal value of the input string.
 std::string HexConvert(std::string &str_obj)
 {  
     
     std::string hex_value;
-    char const hex_chars[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
+    char const hex_chars[16] = { '0', '1', '2', '3', '4', '5', '6', '7', \
+                                 '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
     for (auto& byte : str_obj) {
-        //Mask the lower 4 bits of input byte with 0xF0 and right shift 4 so 
-        //that higer 4 bits are now located in the lower 4 bits
+        // Mask the lower 4 bits of input byte with 0xF0 and right 
+        // shift 4 times so that higer 4 bits are now located in 
+        // the lower 4 bits
 
         hex_value += hex_chars[(byte & 0xF0) >> 4];
-        // Mask the higher 4 bits of the input byte with 0x0F and extact the 
-        // lower for bits
+        // Mask the higher 4 bits of the input byte with 0x0F and 
+        // extact the lower for bits
         hex_value += hex_chars[(byte & 0x0F) >> 0];
     }
 
@@ -132,14 +125,11 @@ std::string HexConvert(std::string &str_obj)
 }
 
 
-void XorInput(std::string& input, std::string& output)
-{
-    for (int i = 0; i < BLOCK_SIZE; i++) {
-        output[i] ^= input[i];
-    }
-}
-
-
+// Rotate the word to the of the input matrix column
+// 1st byte is replaced with the 2nd byte, 
+// 2nd byte is replaced with 3rd byte,
+// 3rd byte is replaced with 4th byte,
+// 4th byte is replaced with 1st byte.
 void RotateWord(unsigned char* column_word) {
     unsigned char temp;
     temp = column_word[0];
@@ -150,33 +140,61 @@ void RotateWord(unsigned char* column_word) {
  }
 
 
+// Substitute a given byte by masking the lower 4 bits of input 
+// and shifting it 4 times to the right and mapping with sbox ROW number
+// Similarly mask the higher 4 bits of the input byte with 0x0f and 
+// mapping it on to sboxColumn number
 void SubstituteWord(unsigned char* input_byte) {
     for (int i = 0; i < COL_SIZE; i++) {
-        input_byte[i] = s_box[(input_byte[i] & 0xF0) >> 4][input_byte[i] & 0x0F];
+        input_byte[i] = s_box[(input_byte[i] & 0xF0) >> 4]
+                             [input_byte[i] & 0x0F];
     }
 }
 
 
-/*
-* 
-             W(i) W(i-1)
-              |     |
-              V     V
-+---------------+------------------+
-| 1 | 2 | 3 | 3 |   4  | 1 | 2 | 3 |
-+----------------------------------+
-| 5 | 6 | 7 | 7 |   7  | 5 | 6 | 7 |
-+----------------------------------+
-| 7 | 6 | 6 | 6 |   7  | 7 | 6 | 6 |
-+----------------------------------+
-| 6 | 7 | 8 | 8 |   9  | 6 | 7 | 8 |
-+---------------+------------------+
-*/
+// This function pretty prints the given matrix.
+// 
+void PrintMatrix(unsigned char ary[][4], int ColumnSize, \
+                 int RowSize, std::string message_to_display)
+{
+    size_t message_to_display_size = message_to_display.size();
+    std::cout << std::string(message_to_display_size, '-') << std::endl;
+    std::cout << message_to_display << std::endl;
+    std::cout << std::string(message_to_display_size, '-') << std::endl;
+    for (int i = 0; i < RowSize; i++) {
+        for (int j = 0; j < ColumnSize; j++) {
+            std::string print_character(1, ary[i][j]);
+            std::cout << HexConvert(print_character) << " ";
+        }
+        std::cout << std::endl;
+    }
+    std::cout << std::endl;
+}
 
+// This function calculates KeySchedule and populates word_matrix
+// number of rounds is key's size + 6  therefore for 128 bit key its 128-bit key
+// and each round needs 16 bytes of keying + one extra key permutation at the very end
+// so the key schedule is of 176 bytes long which is stored in 44 x 4 matrix.
+// In 176 bytes includes 16 byte input + 160 bytes that are computed 4 at a time.
+
+// W[0]         W[i]  W[i-1]                                W[44]
+//  |             |     |                                     |
+//  V             V     V                                     V
+//  +---------------+------------------+        +---------------+
+//  | 1 | 2 | 3 | 3 |   4  | 1 | 2 | 3 |        | 1 | 1 | 2 | 3 |
+//  +----------------------------------+        +---------------+
+//  | 5 | 6 | 7 | 7 |   7  | 5 | 6 | 7 |        | 5 | 5 | 6 | 7 |
+//  +----------------------------------+- - - - +---------------+
+//  | 7 | 6 | 6 | 6 |   7  | 7 | 6 | 6 |        | 7 | 7 | 6 | 6 |
+//  +----------------------------------+        +---------------+
+//  | 6 | 7 | 8 | 8 |   9  | 6 | 7 | 8 |        | 6 | 6 | 7 | 8 |
+//  +---------------+------------------+        +---------------+
+//  
 void BuildKeySchedule(unsigned char word_matrix[][4], std::string &key) {
     unsigned char rcon = 0x01;
     std::memcpy(word_matrix, key.c_str(), key.size());
 
+    PrintMatrix(word_matrix, 4, 4, "Input Key in Hex");
     //key size in 4 byte word
     int key_word = KEY_SIZE >> 2;
     // key word size + 1 extra permutation times key word size
@@ -199,7 +217,9 @@ void BuildKeySchedule(unsigned char word_matrix[][4], std::string &key) {
     }
 }
 
-void AddRoundKey(unsigned char state_matrix[][4], unsigned char word_matrix[][4]){
+// This function XORs state matrix 4 bytes with previous 4 bytes.
+void AddRoundKey(unsigned char state_matrix[][4], 
+                 unsigned char word_matrix[][4]){
     for (int i = 0; i < COL_SIZE; i++) {
         for (int j = 0; j < ROW_SIZE; j++) {
             state_matrix[j][i] = state_matrix[j][i] ^ word_matrix[i][j];
@@ -207,22 +227,37 @@ void AddRoundKey(unsigned char state_matrix[][4], unsigned char word_matrix[][4]
     }
 }
 
+// For each byte in matrix column substitute respective byte by masking 
+// the lower 4 bits of input and shifting it 4 times to the right and 
+// mapping with sbox ROW number, similarly mask the higher 4 bits of 
+// the input byte with 0x0f and mapping it on to s_box Column number.
 void SubstituteByte(unsigned char state_matrix[][4]){
     for (int i = 0; i < ROW_SIZE; i++) {
         for (int j = 0; j < COL_SIZE; j++) {
-            state_matrix[i][j] = s_box[(state_matrix[i][j] & 0xF0) >> 4][state_matrix[i][j] & 0x0F];
+            state_matrix[i][j] = s_box[(state_matrix[i][j] & 0xF0) >> 4]
+                                      [state_matrix[i][j] & 0x0F];
         }
     }
 }
 
+// For each byte in matrix column substitute respective byte by masking 
+// the lower 4 bits of input and shifting it 4 times to the right and 
+// mapping with sbox ROW number, similarly mask the higher 4 bits of 
+// the input byte with 0x0f and mapping it on to inverse s_box Column number.
 void InverseSubstituteByte(unsigned char state_matrix[][4]) {
     for (int i = 0; i < ROW_SIZE; i++) {
         for (int j = 0; j < COL_SIZE; j++) {
-            state_matrix[i][j] = inv_s_box[(state_matrix[i][j] & 0xF0) >> 4][state_matrix[i][j] & 0x0F];
+            state_matrix[i][j] = inv_s_box[(state_matrix[i][j] & 0xF0) >> 4]
+                                          [state_matrix[i][j] & 0x0F];
         }
     }
 }
 
+// This function shifts the rows in following order
+// 1st row rotated right by 0 bytes.
+// 2nd row rotates right by 1 byte.
+// 3rd row rotated right by 2 bytes.
+// 4th row rotated right by 3 bytes.
 void ShiftRows(unsigned char state_matrix[][4]) {
  /*    
 * Unaltered State matrix
@@ -292,6 +327,11 @@ state_matrix[3][1] = state_matrix[3][0];
 state_matrix[3][0] = temp_save;
 }
 
+// This function shifts the rows in following order
+// 1st row rotated left by 0 bytes.
+// 2nd row rotates left by 1 byte.
+// 3rd row rotated left by 2 bytes.
+// 4th row rotated left by 3 bytes.
 void InverseShiftRows(unsigned char state_matrix[][4]) {
  /*
  * Unaltered State matrix
@@ -361,63 +401,22 @@ void InverseShiftRows(unsigned char state_matrix[][4]) {
  state_matrix[3][3] = temp_save;
 }
 
-/*
-* Mix-column, along with shift row, is how Rijndael performs diffusion.
-* The S-Box is responsible for the confusion aspect of the cipher.
-* The mix column stage acts by taking a single column of four of Rijndael's 
-* sixteen values, and performing Matrix multiplication in Rijndael's Galois 
-* field to make it so each byte in the input affects all four bytes of the output.
-* https://en.wikipedia.org/wiki/Rijndael_MixColumns
-*/
-//void MixGivenColumn(unsigned char* r) {
-//
-//    unsigned char a[4];
-//    unsigned char b[4];
-//    unsigned char c;
-//    unsigned char h;
-//    /* The array 'a' is simply a copy of the input array 'r'
-//     * The array 'b' is each element of the array 'a' multiplied by 2
-//     * in Rijndael's Galois field
-//     * a[n] ^ b[n] is element n multiplied by 3 in Rijndael's Galois field */
-//    for (c = 0; c < 4; c++) {
-//        a[c] = r[c];
-//        /* h is 0xff if the high bit of r[c] is set, 0 otherwise */
-//        h = (unsigned char)((signed char)r[c] >> 7); /* arithmetic right shift, thus shifting in either zeros or ones */
-//        b[c] = r[c] << 1; /* implicitly removes high bit because b[c] is an 8-bit char, so we xor by 0x1b and not 0x11b in the next line */
-//        b[c] ^= 0x1B & h; /* Rijndael's Galois field */
-//    }
-//    r[0] = b[0] ^ a[3] ^ a[2] ^ b[1] ^ a[1]; /* 2 * a0 + a3 + a2 + 3 * a1 */
-//    r[1] = b[1] ^ a[0] ^ a[3] ^ b[2] ^ a[2]; /* 2 * a1 + a0 + a3 + 3 * a2 */
-//    r[2] = b[2] ^ a[1] ^ a[0] ^ b[3] ^ a[3]; /* 2 * a2 + a1 + a0 + 3 * a3 */
-//    r[3] = b[3] ^ a[2] ^ a[1] ^ b[0] ^ a[0]; /* 2 * a3 + a2 + a1 + 3 * a0 */
-//
-//}
 
-//void MixColumns(unsigned char state_matrix[][4]){
-//    for (int i = 0; i < COL_SIZE; i++) {
-//            MixGivenColumn(state_matrix[i]);
-//    }
-//}
-
-//static void MixColumns(unsigned char state_matrix[][4])
-//{
-//    unsigned char Tmp, Tm, t;
-//    for (int i = 0; i < 4; ++i)
-//    {
-//        t = state_matrix[i][0];
-//        Tmp = state_matrix[i][0] ^ state_matrix[i][1] ^ state_matrix[i][2] ^ state_matrix[i][3];
-//        Tm = state_matrix[i][0] ^ state_matrix[i][1]; Tm = xtime(Tm);  state_matrix[i][0] ^= Tm ^ Tmp;
-//        Tm = state_matrix[i][1] ^ state_matrix[i][2]; Tm = xtime(Tm);  state_matrix[i][1] ^= Tm ^ Tmp;
-//        Tm = state_matrix[i][2] ^ state_matrix[i][3]; Tm = xtime(Tm);  state_matrix[i][2] ^= Tm ^ Tmp;
-//        Tm = state_matrix[i][3] ^ t;              Tm = xtime(Tm);  state_matrix[i][3] ^= Tm ^ Tmp;
-//    }
-//}
-
+// This function returns 0x1b if high bit of given byte is 1
+// other wise returns 0 this is used in galois field multiplication.
+// example: (d4 * 2 ) is d4 << 1 = 1A8 since the high bit of d4 
+// is set its XORed with 0x1b which gives b3
+// 0xob is dervived from GF(2^8) field and it 
+// is represented in irreducible polynomial as x^8+x^4+x^3+x^1+x^0 
+// which is inturn represented as 0001 1011 <=> 0x1B in hex
 unsigned char xtime(unsigned char x)
 {
     return (x << 1) ^ ((x & 0x80) ? 0x1b : 0x00);
 }
 
+
+// This function performs dot product of two variables by Xoring
+// Xtime values of multiplicand with the multipler.
 unsigned char dot(unsigned char x, unsigned char y)
 {
     unsigned char mask;
@@ -435,6 +434,34 @@ unsigned char dot(unsigned char x, unsigned char y)
     return product;
 }
 
+// This function does Columnn-mixing operation by performing
+// linear transformation on each columns by multiplying in to a fixed 
+// constants. Since each column has 4 rows
+// the matrix transformation has to be 4x4 and is defined as follows
+//     | 2  3  1  1 |
+// M = | 1  2  3  1 | 
+//     | 1  1  2  3 |  
+//     | 3  1  1  2 |
+// Multiplying by 1 is straight forward
+// Multiplying by 2 is equivalent to shifting the number left by one, 
+// and then exclusiving-or'ing the value 0x1B if the high bit had been one
+// (carry over). If the high bit was zero then there was no need to XOR
+// Multiplying 3 can be done mutiplying by 2 and then XORing with orginal value.
+// 3 can be written as 2 + 1 <=> 2 XOR 1
+// 3 * some_number = (2 XOR 1) * some_number = (2 * some_number) XOR some_number.  
+// Once you've multiplied all the vector elements, then you need to add them.
+// This "addition" operation is actually XOR operation. 
+// They've written it as + because, in GF(2^n) fields, XOR is addition operation.
+// if the column [d4 bf 5d 30] needs to be multipled with galios matrix it is
+// ( d4 * 0 2) + ( bf * 03 ) + ( 5d * 01 ) + (30 * 01 )
+// d4×02  is d4 << 1 and XORed with 0x1B as their is a carry over (high bit of d4 is set)
+// which gives the result b3.
+// Similiarly, 0xbf x 03 is 0xbf << 1 and XORed with 0x1B resulting in 0xda
+// 5d * 01 = 5d
+// 30 * 01 = 30
+// ( d4 * 0 2) + ( bf * 03 ) + ( 5d * 01 ) + (30 * 01 ) = b3 + da + 5d + 30 = 04
+// please note: +  here indecates XOR
+//Implementation from Josha Davis book "Implemnting SSL/TLS"
 static void MixColumns(unsigned char s[][4])
 {
     int c;
@@ -454,7 +481,15 @@ static void MixColumns(unsigned char s[][4])
 }
 
 
-
+// This function does Columnn-mixing operation by performing
+// linear transformation on each columns by multiplying in to a fixed 
+// constants. Since linear transformation has an inverse, this operation
+// is invertible. Each column has 4 rows the matrix transformation 
+// has to be 4x4 and is defined as follows
+//             | 14  11  13  09 |
+// Inverse(M) =| 09  14  11  13 | 
+//             | 13  09  14  11 |  
+//             | 11  13  09  14 |
 static void InverseMixColumns(unsigned char s[][4])
 {
     int c;
@@ -474,14 +509,13 @@ static void InverseMixColumns(unsigned char s[][4])
 }
 
 
-
-std::string Encrypt(std::string &input, std::string &output, std::string &key) {
+//This function encrypts the input string with input cipher key
+std::string Encrypt(std::string &input, std::string &key) {
     unsigned char state_matrix[4][4];
     // for 128bit key 10 rounds required.
     const int number_rounds = 10;
     // Array to store Key schedule for 128 bit keys
     unsigned char word_matrix[60][4];
-
 
     for (int i = 0; i < ROW_SIZE; i++) {
         for (int j = 0; j < COL_SIZE; j++) {
@@ -489,10 +523,10 @@ std::string Encrypt(std::string &input, std::string &output, std::string &key) {
         }
     }
 
-    
+    PrintMatrix(state_matrix, 4, 4, "Input Message in Hex");
     BuildKeySchedule(word_matrix, key);
+    PrintMatrix(word_matrix, 44, 4, "Key Schedule Matrix");
     AddRoundKey(state_matrix, &word_matrix[0]);
-
 
     for (int round = 0; round < number_rounds; round++)
     {
@@ -505,7 +539,6 @@ std::string Encrypt(std::string &input, std::string &output, std::string &key) {
  
     }
 
-
     std::string encrypted_char(16,' ');
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 4; j++) {
@@ -513,19 +546,18 @@ std::string Encrypt(std::string &input, std::string &output, std::string &key) {
         }
     }
 
-
-    std::cout << HexConvert(encrypted_char);
-    std::cout << std::endl;
-    return HexConvert(encrypted_char);
+    PrintMatrix(state_matrix, 4, 4, "Encrypted Message Matrix");
+    std::cout << "Encrypted message string = "<< encrypted_char << std::endl;
+    return encrypted_char;
 }
 
-
-std::string Decrypt(std::string& input, std::string& output, std::string& key){
+//This function decrypts the input string with input cipher key
+std::string Decrypt(std::string& output, std::string& key){
     unsigned char state_matrix[4][4];
     // for 128bit key 10 rounds required.
     const int number_rounds = 10;
     // Array to store Key schedule for 128 bit keys
-    unsigned char word_matrix[60][4];
+    unsigned char word_matrix[44][4];
     std::string decrypt_output(16,' ');
 
     for (int i = 0; i < ROW_SIZE; i++){
@@ -552,7 +584,6 @@ std::string Decrypt(std::string& input, std::string& output, std::string& key){
             decrypt_output += state_matrix[i][j];
         }
     }
-    std::cout << std::endl;
 
     return HexConvert(decrypt_output);
 }
@@ -563,12 +594,19 @@ int main()
     std::string sample_message("MY AES TOOL DEMO");
     std::string init_vector("UNSW_INIT_VECTOR");
     std::string key("UNSW_PROJECT_AES");
-    //hex_convert(sample);
-    XorInput(init_vector, sample_message);
-    std::string encrypted_hex_string = Encrypt(sample_message,sample_message, key);
-    Decrypt(encrypted_hex_string, encrypted_hex_string, key);
-    XorInput(init_vector, sample_message);
-    std::cout << sample_message;
+
+
+    std::cout << "-------------------------" << std::endl;
+    std::cout << "Encrypted Output:" << std::endl;
+    std::cout << "-------------------------" << std::endl << std::endl;
+    std::string encrypted_hex_string = Encrypt(sample_message, key);
+    std::cout << "------------------" << std::endl;
+    std::cout << "Decrypted Output :" << std::endl;
+    std::cout << "------------------" << std::endl;
+    std::string decrypted_hex_string = Decrypt(encrypted_hex_string, key);
+    std::cout << "In ASCII characters:" << sample_message <<std::endl;
+    std::cout << std::endl<<std::endl;
+    std::cout << "--------------------";
 
 }
 
