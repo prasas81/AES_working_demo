@@ -460,7 +460,7 @@ unsigned char dot(unsigned char x, unsigned char y)
 // 5d * 01 = 5d
 // 30 * 01 = 30
 // ( d4 * 0 2) + ( bf * 03 ) + ( 5d * 01 ) + (30 * 01 ) = b3 + da + 5d + 30 = 04
-// please note: +  here indecates XOR
+// please note: +  here indicates XOR
 //Implementation from Josha Davis book "Implemnting SSL/TLS"
 static void MixColumns(unsigned char s[][4])
 {
